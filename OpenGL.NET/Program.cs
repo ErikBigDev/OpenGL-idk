@@ -26,17 +26,20 @@ class Program
 		Glfw.WindowHint(Hint.Decorated, true);
 		Glfw.WindowHint(Hint.OpenglForwardCompatible, true);
 
-		Gl.DebugMessageCallback(GLDebugProc, IntPtr.Zero);
 
 		Window window = Glfw.CreateWindow(900, 500, "Title", GLFW.Monitor.None, Window.None);
-		Gl.Initialize();
 		Glfw.MakeContextCurrent(window);
+		Gl.Initialize();
+		Gl.DebugMessageCallback(GLDebugProc, IntPtr.Zero);
 
 		float[] vertex = new float[6] {
 			-0.5f, -0.5f,
 			 0.0f,  0.5f,
 			 0.5f, -0.5f
 		};
+
+		uint vao = Gl.GenVertexArray();
+		Gl.BindVertexArray(vao);
 
 		uint vb = Gl.GenBuffer();
 		Gl.BindBuffer(BufferTarget.ArrayBuffer, vb);
@@ -59,14 +62,16 @@ class Program
 			Glfw.PollEvents();
 		}
 
-		Glfw.DestroyWindow(window);
+		//Glfw.DestroyWindow(window);
 		Glfw.Terminate();
 	}
 
-	static uint CompileShader(ShaderType type, string src)
+	static uint CompileShader(uint type, string src)
 	{
 		string[] str = new string[] { src };
-		uint id = Gl.CreateShader(type);
+		uint id = Gl.CreateShader((ShaderType)type);
+		if(id == 0)
+			Console.WriteLine("000000000000");
 		Gl.ShaderSource(id, str);
 		Gl.CompileShader(id);
 
@@ -77,11 +82,14 @@ class Program
 		{
 			int lenght;
 			Gl.GetShader(id, ShaderParameterName.InfoLogLength, out lenght);
+			//Gl.GetShader(id, ShaderParameterName.ShaderSourceLength, out lenght);
 
 			StringBuilder sb = new StringBuilder(lenght);
 			Gl.GetShaderInfoLog(id, lenght, out _, sb);
+			//Gl.GetShaderSource(id, lenght, out _, sb);
 
-			Console.WriteLine("Failed to compile " + type.ToString() + " " + sb.ToString());
+			Console.WriteLine($"Failed to compile {type.ToString()}  {sb}");
+			Console.WriteLine("\n" + src);
 
 			Gl.DeleteShader(id);
 
@@ -97,8 +105,8 @@ class Program
 		string fragSrc = File.ReadAllText(Environment.CurrentDirectory + @"\..\..\res\" + shaderName + ".frag");
 
 		uint id = Gl.CreateProgram();
-		uint vert = CompileShader(ShaderType.VertexShader, vertSrc);
-		uint frag = CompileShader(ShaderType.FragmentShader, fragSrc);
+		uint vert = CompileShader(Gl.VERTEX_SHADER, vertSrc);
+		uint frag = CompileShader(Gl.FRAGMENT_SHADER, fragSrc);
 
 		Gl.AttachShader(id, vert);
 		Gl.AttachShader(id, frag);
