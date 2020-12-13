@@ -8,7 +8,7 @@ class Program
 {
     private static void Main()
     {
-        using (var window = new Window(800, 600, "LearnOpenTK - Hello Triangle!"))
+        using (var window = new Window(800, 600, "OpenTK"))
         {
             window.Run(60.0);
         }

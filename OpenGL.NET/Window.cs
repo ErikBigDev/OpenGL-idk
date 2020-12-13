@@ -5,143 +5,100 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 
 using OpenTK;
+using OpenTK.Platform;
+using OpenTK.Platform.Windows;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL4;
 
 class Window : GameWindow
 {
-	public Window(int width, int height, string title) : base(width, height, GraphicsMode.Default, title)
+	public Window(int width, int height, string title) 
+		: base(width, height, GraphicsMode.Default, title, GameWindowFlags.Default, DisplayDevice.Default, 4, 3, GraphicsContextFlags.Debug & GraphicsContextFlags.ForwardCompatible & GraphicsContextFlags.Embedded)
 	{
-		
+		GL.DebugMessageCallback(GLDebugProc, IntPtr.Zero);
+		Context.ErrorChecking = true;
 	}
 
 	float[] vertex;
+	uint[] index;
 
-	int vbo;
-	int vao;
+	VertexArray vao;
+	VertexBuffer<float> vbo;
+	IndexBuffer ibo;
 
-	int shader;
+	Shader shader;
+
+	Renderer renderer;
 
 	protected override void OnLoad(EventArgs e)
 	{
-		vertex = new float[6] {
+		vertex = new float[8] {
 			-0.5f, -0.5f,
-			 0.0f,  0.5f,
-			 0.5f, -0.5f
+			 0.5f, -0.5f,
+			 0.5f,	0.5f,
+			-0.5f,  0.5f
 		};
 
-		vao = GL.GenVertexArray();
-		GL.BindVertexArray(vao);
+		index = new uint[6]
+		{
+			0, 1, 2,
+			2, 3, 0
+		};
 
-		vbo = GL.GenBuffer();
-		GL.BindBuffer(BufferTarget.ArrayBuffer, vbo);
-		GL.BufferData(BufferTarget.ArrayBuffer, vertex.Length * sizeof(float), vertex, BufferUsageHint.StaticDraw);
-		GL.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, sizeof(float) * 2, 0);
+		vbo = new VertexBuffer<float>(vertex, vertex.Length * sizeof(float));
 
-		GL.EnableVertexAttribArray(0);
+		vao = new VertexArray();
 
-		shader = CreateShader("Standard");
-		GL.UseProgram(shader);
+		VertexBufferLayout layout = new VertexBufferLayout();
+		layout.Push(2, VertexAttribPointerType.Float);
 
-		
+		vao.AddBuffer(vbo, layout);
+
+		ibo = new IndexBuffer(index, index.Length);
+
+		shader = new Shader("Standard");
+		shader.Bind();
+
+		shader.Uniform4("u_Color", Color4.Teal);
+
+		renderer = new Renderer();
+
 		base.OnLoad(e);
 	}
 
+	float r = 0.0f;
+
 	protected override void OnRenderFrame(FrameEventArgs e)
 	{
-		GL.ClearColor(Color.FromArgb(100, 200, 230));
-		GL.Clear(ClearBufferMask.ColorBufferBit);
+		renderer.Clear();
 
-		GL.DrawArrays(PrimitiveType.Triangles, 0, 3);
+		r += 0.03f;
+
+		shader.Uniform4("u_Color", new Color4(Math.Abs(((int)r % 2) - (r - (int)r)), Color4.Teal.G, Color4.Teal.B, 1.0f));
+		renderer.Draw(vao, ibo, shader);
 
 		SwapBuffers();
 		base.OnRenderFrame(e);
 	}
-	static int CompileShader(uint type, string src)
+
+	protected override void OnUnload(EventArgs e)
 	{
-		int id = GL.CreateShader((ShaderType)type);
-		if(id == 0)
-			Console.WriteLine("000000000000");
-		GL.ShaderSource(id, src);
-		GL.CompileShader(id);
+		ibo.Dispose();
+		vbo.Dispose();
+		vao.Dispose();
+		shader.Dispose();
 
-		int result;
-		GL.GetShader(id, ShaderParameter.CompileStatus, out result);
-
-		if(result == 0)
-		{
-			int lenght;
-			GL.GetShader(id, ShaderParameter.InfoLogLength, out lenght);
-			//GL.GetShader(id, ShaderParameterName.ShaderSourceLength, out lenght);
-
-			string infoLog;
-			GL.GetShaderInfoLog(id, out infoLog);
-			//GL.GetShaderSource(id, lenght, out _, sb);
-
-			Console.WriteLine($"Failed to compile {type.ToString()}  {infoLog}");
-			Console.WriteLine("\n" + src);
-
-			GL.DeleteShader(id);
-
-			return 0;
-		}
-
-		return id;
+		base.OnUnload(e);
 	}
 
-	static int CreateShader(string shaderName)
+	public static void GLDebugProc(DebugSource source, DebugType type, int id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)
 	{
-		string vertSrc = File.ReadAllText(Environment.CurrentDirectory + @"\..\..\res\" + shaderName + ".vert");
-		string fragSrc = File.ReadAllText(Environment.CurrentDirectory + @"\..\..\res\" + shaderName + ".frag");
+		string strMessage = Marshal.PtrToStringAnsi(message);
 
-		int id = GL.CreateProgram();
-		int vert = CompileShader((uint)ShaderType.VertexShader, vertSrc);
-		int frag = CompileShader((uint)ShaderType.FragmentShader, fragSrc);
-
-		GL.AttachShader(id, vert);
-		GL.AttachShader(id, frag);
-		GL.LinkProgram(id);
-		GL.ValidateProgram(id);
-
-		//GL.DetachShader(id, vert);
-		//GL.DetachShader(id, frag);
-
-		int result;
-		GL.GetProgram(id, GetProgramParameterName.ValidateStatus, out result);
-
-		if(result == 0)
-		{
-			int lenght;
-			GL.GetProgram(id, GetProgramParameterName.InfoLogLength, out lenght);
-
-			string infoLog;
-			GL.GetProgramInfoLog(id, out infoLog);
-
-			Console.WriteLine("Failed to validate " + infoLog);
-
-			GL.DeleteProgram(id);
-
-			return 0;
-		}
-
-		return id;
-	}
-
-	private static void GLDebugProc(DebugSource source, DebugType type, uint id, DebugSeverity severity, int length, IntPtr message, IntPtr userParam)
-	{
-		string strMessage;
-		unsafe
-		{
-			strMessage = Encoding.ASCII.GetString((byte*)message.ToPointer(), length);
-		}
 
 		Console.WriteLine($"[{ (type == DebugType.DebugTypeError ? "**GL ERROR**" : type.ToString())}; {severity.ToString()}]: {strMessage}; From: {source.ToString()}");
 		Debugger.Break();
 	}
-
 }
